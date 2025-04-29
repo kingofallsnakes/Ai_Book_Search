@@ -1,0 +1,76 @@
+const GEMINI_API_KEY = "AIzaSyDyoyEUVgBCjKaMe0pZCMRmWv8emByH-1g";
+
+export async function searchBooksAPI(query) {
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{
+            text: `
+              Please provide a list of 5 book recommendations related to "${query}". 
+              Respond strictly in this exact JSON format:
+              [
+                {
+                  "title": "Book Title",
+                  "author": "Author Name",
+                  "description": "Short book description (only 2-3 lines, around 30-50 words maximum)",
+                  "price": "Book price in USD (example: $15.99)",
+                  "rating": "Average rating out of 5 (example: 4.5)",
+                  "publishedYear": "Year the book was published (example: 2020)"
+                }
+              ]
+              If you cannot find book recommendations, return an empty array.
+            `
+          }]
+        }],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 1024,
+        },
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`API request failed: ${errorBody}`);
+  }
+
+  const data = await response.json();
+  const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+  if (!responseText) {
+    throw new Error("No book recommendations found");
+  }
+
+  const cleanedText = responseText
+    .replace(/```json/g, "")
+    .replace(/```/g, "")
+    .trim();
+
+  let bookResults = [];
+  try {
+    bookResults = JSON.parse(cleanedText);
+  } catch (error) {
+    console.error("JSON parsing error:", error);
+    throw new Error("Could not parse book recommendations");
+  }
+
+  if (!Array.isArray(bookResults)) {
+    throw new Error("Invalid format received from AI");
+  }
+
+  return bookResults.map(book => ({
+    title: book.title || "Untitled Book",
+    author: book.author || "Unknown Author",
+    description: book.description || "No description available",
+    price: book.price || "Price not available",
+    rating: book.rating || "Rating not available",
+    publishedYear: book.publishedYear || "Year not available",
+  }));
+}
